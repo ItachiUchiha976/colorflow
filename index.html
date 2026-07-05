@@ -103,6 +103,7 @@
       <button class="iconbtn" id="sound" title="Son">🔊</button>
       <button class="iconbtn" id="undo" title="Annuler">↩︎</button>
       <button class="iconbtn" id="restart" title="Recommencer">⟳</button>
+      <button class="iconbtn" id="addtube" title="Ajouter un tube vide">➕</button>
       <button class="iconbtn" id="help" title="Règles">?</button>
     </div>
   </div>
@@ -342,6 +343,15 @@
     if(!confirm('Recommencer ce niveau ?'))return;
     st=genLevel(st.level); history=[]; sel=-1; render();
   });
+  /* ➕ ajouter un tube vide (1 par niveau) via pub récompensée — offert aux Pro */
+  $('addtube').addEventListener('click',function(){
+    if(!st){ return; }
+    if((st.extra||0) >= 1){ toast('Déjà utilisé sur ce niveau'); return; }
+    var grant=function(){ history.push(JSON.stringify(st.tubes)); st.tubes.push([]); st.extra=(st.extra||0)+1; sel=-1; render(); toast('+1 tube vide ✨'); };
+    if(noAds){ grant(); return; }
+    toast('Regarde une courte pub pour +1 tube');
+    showRewarded(grant);
+  });
   $('sound').addEventListener('click',function(){
     soundOn=soundOn?0:1; localStorage.setItem('cf_sound',JSON.stringify(soundOn));
     $('sound').textContent=soundOn?'🔊':'🔇'; if(soundOn){ac();sPick();}
@@ -371,14 +381,19 @@
   var AdMob=(isNative && Cap.Plugins)?Cap.Plugins.AdMob:null;
   var AD_BANNER='ca-app-pub-3940256099942544/6300978111';   // TEST — à remplacer par l'ID prod
   var AD_INTER='ca-app-pub-3940256099942544/1033173712';    // TEST — à remplacer par l'ID prod
+  var AD_REWARD='ca-app-pub-3940256099942544/5224354917';   // TEST rewarded — à remplacer par l'ID prod
   var interReady=false, pendingAfter=null;
+  var rewardReady=false, pendingReward=null, rewardGranted=false;
   function adInit(){
     if(!AdMob || noAds) return;
     AdMob.initialize({initializeForTesting:true}).then(function(){
       try{ AdMob.addListener('interstitialAdDismissed',onInterClosed); }catch(e){}
       try{ AdMob.addListener('interstitialAdFailedToShow',onInterClosed); }catch(e){}
+      try{ AdMob.addListener('onRewardedVideoAdReward',function(){ rewardGranted=true; }); }catch(e){}
+      try{ AdMob.addListener('onRewardedVideoAdDismissed',onRewardClosed); }catch(e){}
+      try{ AdMob.addListener('onRewardedVideoAdFailedToShow',onRewardFail); }catch(e){}
       AdMob.showBanner({adId:AD_BANNER,adSize:'ADAPTIVE_BANNER',position:'BOTTOM_CENTER',margin:0,isTesting:true}).catch(function(){});
-      prepInter();
+      prepInter(); prepReward();
     }).catch(function(){});
   }
   function prepInter(){ if(!AdMob)return; AdMob.prepareInterstitial({adId:AD_INTER,isTesting:true}).then(function(){interReady=true;}).catch(function(){interReady=false;}); }
@@ -388,6 +403,15 @@
     if(AdMob && interReady){ pendingAfter=after; AdMob.showInterstitial().catch(function(){ onInterClosed(); }); }
     else houseAd(after);
   }
+  /* ---- rewarded : "+1 tube vide" (débloque un niveau coincé) ---- */
+  function prepReward(){ if(!AdMob)return; AdMob.prepareRewardVideoAd({adId:AD_REWARD,isTesting:true}).then(function(){rewardReady=true;}).catch(function(){rewardReady=false;}); }
+  function showRewarded(cb){
+    if(noAds){ cb&&cb(); return; }   // Pro : bonus offert sans pub
+    if(AdMob && rewardReady){ pendingReward=cb; rewardGranted=false; AdMob.showRewardVideoAd().catch(function(){ pendingReward=null; houseAd(cb); }); }
+    else houseAd(cb);   // web / no-fill : house-ad puis on accorde le bonus
+  }
+  function onRewardClosed(){ rewardReady=false; prepReward(); var cb=pendingReward; pendingReward=null; var g=rewardGranted; rewardGranted=false; if(cb && g) cb(); }
+  function onRewardFail(){ var cb=pendingReward; pendingReward=null; if(cb) houseAd(cb); }
   /* achat "sans pub" : Play Billing à brancher à la publication ; flag persistant en attendant */
   function buyPremium(){
     if(noAds){ toast('Tu es déjà sans pub ✨'); return; }

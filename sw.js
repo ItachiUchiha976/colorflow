@@ -1,5 +1,5 @@
 /* ColorFlow · service worker (network-first sur le HTML pour éviter les MAJ coincées) */
-var CACHE = 'colorflow-v3';
+var CACHE = 'colorflow-v4';
 var ASSETS = ['./','./index.html','./manifest.webmanifest','./icon-192.png','./icon-512.png','./icon-512-maskable.png'];
 self.addEventListener('install', function(e){ self.skipWaiting();
   e.waitUntil(caches.open(CACHE).then(function(c){return c.addAll(ASSETS);}).catch(function(){})); });
