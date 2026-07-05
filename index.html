@@ -25,14 +25,17 @@
     background:radial-gradient(1200px 800px at 50% -8%, #1b2a55 0%, #0e1630 45%, #070c1c 100%);
     color:var(--text);min-height:100dvh;display:flex;flex-direction:column;overflow:hidden;touch-action:manipulation;
   }
-  .top{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 4px}
-  .logo{font-weight:800;font-size:20px;letter-spacing:.3px;display:flex;align-items:center;gap:8px}
-  .logo .dot{width:14px;height:14px;border-radius:50%;background:conic-gradient(#33e1c4,#7c5cff,#ff5c8a,#ffd257,#33e1c4);box-shadow:0 0 14px rgba(124,92,255,.6)}
+  .top{display:flex;align-items:center;justify-content:space-between;padding:12px 9px 4px;gap:6px}
+  .logo{font-weight:800;font-size:16px;letter-spacing:.2px;display:flex;align-items:center;gap:5px;flex:0 0 auto}
+  .logo .dot{width:12px;height:12px;border-radius:50%;background:conic-gradient(#33e1c4,#7c5cff,#ff5c8a,#ffd257,#33e1c4);box-shadow:0 0 12px rgba(124,92,255,.6)}
   .logo b{background:linear-gradient(90deg,#7cf0dc,#a99bff);-webkit-background-clip:text;background-clip:text;color:transparent}
-  .hud{display:flex;gap:6px;align-items:center}
-  .chip{background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:12px;padding:7px 11px;font-size:13px;font-weight:700;color:var(--text)}
-  .chip .k{color:var(--muted);font-weight:600;margin-right:5px}
-  .iconbtn{width:38px;height:38px;border-radius:12px;background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--text);font-size:17px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+  .hud{display:flex;gap:5px;align-items:center;flex:0 1 auto}
+  .chip{background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:11px;padding:6px 8px;font-size:12px;font-weight:800;color:var(--text);white-space:nowrap}
+  .chip .k{color:var(--muted);font-weight:600;margin-right:3px}
+  .chip .sep{color:var(--muted);margin:0 3px}
+  .iconbtn{width:33px;height:33px;border-radius:11px;background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--text);font-size:15px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:0 0 auto}
+  body.native{padding-bottom:62px}
+  body.native .adbar{display:none}
   .iconbtn:active{transform:scale(.94)}
   .stage{flex:1;display:flex;align-items:center;justify-content:center;padding:6px 10px;position:relative}
   .tubes{display:flex;flex-wrap:wrap;gap:16px 20px;justify-content:center;align-items:flex-end;max-width:560px}
@@ -94,10 +97,9 @@
 </head>
 <body>
   <div class="top">
-    <div class="logo"><span class="dot"></span> Color<b>Flow</b></div>
+    <div class="logo"><span class="dot"></span>Color<b>Flow</b></div>
     <div class="hud">
-      <span class="chip"><span class="k">Niv.</span><span id="lvl">1</span></span>
-      <span class="chip"><span class="k">Coups</span><span id="moves">0</span></span>
+      <span class="chip"><span class="k">N</span><span id="lvl">1</span><span class="sep">·</span><span id="moves">0</span></span>
       <button class="iconbtn" id="sound" title="Son">🔊</button>
       <button class="iconbtn" id="undo" title="Annuler">↩︎</button>
       <button class="iconbtn" id="restart" title="Recommencer">⟳</button>
@@ -167,6 +169,18 @@
       </div>
       <button class="btn" id="playBtn">Jouer ▶</button>
       <button class="btn sec" id="contBtn">Reprendre au niveau <span id="contLvl">1</span></button>
+      <button class="btn sec" id="premBtn" style="margin-top:10px">✨ Supprimer les pubs</button>
+    </div>
+  </div>
+
+  <!-- PREMIUM -->
+  <div class="ov" id="premOv">
+    <div class="sheet">
+      <div class="big">✨</div>
+      <h2>ColorFlow sans pub</h2>
+      <p>Supprime <b>définitivement</b> toutes les publicités (bannière + plein écran).<br>Un seul paiement, à vie.</p>
+      <button class="btn" id="premBuy">Passer sans pub</button>
+      <button class="btn sec" id="premClose">Plus tard</button>
     </div>
   </div>
 
@@ -189,7 +203,7 @@
 
   var st=null;          // {level, tubes:[[..]], moves}
   var sel=-1, history=[], winCount=load('cf_wins',0), busy=false;
-  var soundOn=load('cf_sound',1), tutDone=load('cf_tut',0);
+  var soundOn=load('cf_sound',1), tutDone=load('cf_tut',0), noAds=load('cf_premium',0);
 
   function load(k,d){try{var v=localStorage.getItem(k);return v==null?d:JSON.parse(v);}catch(e){return d;}}
   function saveWins(){localStorage.setItem('cf_wins',JSON.stringify(winCount));}
@@ -347,12 +361,48 @@
   function optimalGuess(){ return levelConfig(st.level).colors*2+2; }
   $('nextBtn').addEventListener('click',function(){
     $('winOv').classList.remove('show');
-    if(winCount % AD_EVERY === 0){ showAd(nextLevel); } else { nextLevel(); }
+    if(winCount % AD_EVERY === 0){ showInterstitial(nextLevel); } else { nextLevel(); }
   });
   function nextLevel(){ st=genLevel(st.level+1); history=[]; sel=-1; saveGame(); render(); }
 
-  /* ---- interstitial (house ad) ---- */
-  function showAd(after){
+  /* ---- AdMob natif (repli house-ad sur le web / no-fill) ---- */
+  var Cap=window.Capacitor;
+  var isNative=!!(Cap && Cap.isNativePlatform && Cap.isNativePlatform());
+  var AdMob=(isNative && Cap.Plugins)?Cap.Plugins.AdMob:null;
+  var AD_BANNER='ca-app-pub-3940256099942544/6300978111';   // TEST — à remplacer par l'ID prod
+  var AD_INTER='ca-app-pub-3940256099942544/1033173712';    // TEST — à remplacer par l'ID prod
+  var interReady=false, pendingAfter=null;
+  function adInit(){
+    if(!AdMob || noAds) return;
+    AdMob.initialize({initializeForTesting:true}).then(function(){
+      try{ AdMob.addListener('interstitialAdDismissed',onInterClosed); }catch(e){}
+      try{ AdMob.addListener('interstitialAdFailedToShow',onInterClosed); }catch(e){}
+      AdMob.showBanner({adId:AD_BANNER,adSize:'ADAPTIVE_BANNER',position:'BOTTOM_CENTER',margin:0,isTesting:true}).catch(function(){});
+      prepInter();
+    }).catch(function(){});
+  }
+  function prepInter(){ if(!AdMob)return; AdMob.prepareInterstitial({adId:AD_INTER,isTesting:true}).then(function(){interReady=true;}).catch(function(){interReady=false;}); }
+  function onInterClosed(){ interReady=false; prepInter(); var a=pendingAfter; pendingAfter=null; if(a)a(); }
+  function showInterstitial(after){
+    if(noAds){ after&&after(); return; }
+    if(AdMob && interReady){ pendingAfter=after; AdMob.showInterstitial().catch(function(){ onInterClosed(); }); }
+    else houseAd(after);
+  }
+  /* achat "sans pub" : Play Billing à brancher à la publication ; flag persistant en attendant */
+  function buyPremium(){
+    if(noAds){ toast('Tu es déjà sans pub ✨'); return; }
+    if(AdMob && Cap.Plugins && Cap.Plugins.InAppPurchase){
+      // TODO : brancher Google Play Billing (produit "remove_ads") une fois le compte Play créé
+    }
+    // En attendant la boutique Play : informer honnêtement
+    toast('Bientôt : achat "sans pub" via le Play Store ✨');
+  }
+  function applyPremium(){ noAds=1; localStorage.setItem('cf_premium','1');
+    if(AdMob){ try{AdMob.hideBanner();}catch(e){} try{AdMob.removeBanner();}catch(e){} }
+    toast('Merci ! Pubs supprimées ✨'); }
+
+  /* ---- interstitial (house ad — web + repli natif) ---- */
+  function houseAd(after){
     var p=PROMOS[Math.floor(Math.random()*PROMOS.length)];
     $('promo').innerHTML='<div class="emo">'+p.emo+'</div><div><h3>'+p.h+'</h3><p>'+p.p+'</p>'+
       '<a class="plain" href="'+p.u+'" target="_blank" rel="noopener" style="font-size:13px">Découvrir →</a></div>';
@@ -410,6 +460,32 @@
   st=genLevel(savedLevel()); render();
   $('startOv').classList.add('show');
 
+  // natif : réserver l'espace bannière + bouton retour Android
+  if(isNative){
+    document.body.classList.add('native');
+    if(Cap.Plugins && Cap.Plugins.App){
+      Cap.Plugins.App.addListener('backButton', function(){
+        var ov=document.querySelector('.ov.show');
+        if(ov){ if(ov.id!=='startOv') ov.classList.remove('show'); return; }
+        if(sel>=0){ sel=-1; render(); return; }        // désélectionne un tube
+        try{ Cap.Plugins.App.minimizeApp(); }catch(e){ try{Cap.Plugins.App.exitApp();}catch(e2){} }
+      });
+    }
+  }
+  // premium (supprimer les pubs)
+  $('premBtn').addEventListener('click',function(){ $('premOv').classList.add('show'); });
+  $('premClose').addEventListener('click',function(){ $('premOv').classList.remove('show'); });
+  $('premBuy').addEventListener('click',function(){ $('premOv').classList.remove('show'); buyPremium(); });
+  if(noAds){ var pb=$('premBtn'); if(pb) pb.style.display='none'; }
+  // pub plein écran toutes les 30 min (en plus de toutes les 3 parties)
+  function tryTimeAd(){
+    if(noAds) return;
+    if(!busy && sel<0 && st && !document.querySelector('.ov.show')){ showInterstitial(function(){}); }
+    else { setTimeout(tryTimeAd, 20000); }
+  }
+  setInterval(tryTimeAd, 30*60*1000);
+
+  adInit();
   if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(function(){}); }
 })();
 </script>
