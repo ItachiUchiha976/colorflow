@@ -54,9 +54,19 @@
   @keyframes winpop{0%{transform:scale(1)}40%{transform:scale(1.08)}100%{transform:scale(1)}}
   .tube.hintpulse{animation:hintpulse 1s ease-in-out infinite}
   @keyframes hintpulse{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+  .tube.hintsrc{border-color:var(--gold);animation:hintpulse 1s ease-in-out infinite;box-shadow:0 0 0 3px rgba(255,210,87,.25),0 0 22px rgba(255,210,87,.45),inset 0 -8px 20px rgba(0,0,0,.25)}
+  .tube.hintdst{border-color:var(--good);box-shadow:0 0 0 3px rgba(55,224,138,.25),0 0 22px rgba(55,224,138,.45),inset 0 -8px 20px rgba(0,0,0,.25)}
+  .tube.pouring{z-index:6;transform-origin:50% 92%;transition:transform .18s ease-out}
   .seg{width:100%;height:25%;position:relative;z-index:1}
-  .seg.pourin{animation:pourin .34s cubic-bezier(.35,.9,.4,1)}
-  @keyframes pourin{0%{transform:translateY(-220px) scaleY(.5);opacity:.15}60%{opacity:1}80%{transform:translateY(6px) scaleY(1.08)}100%{transform:translateY(0) scaleY(1);opacity:1}}
+  .seg.pourin{animation:pourin .38s cubic-bezier(.25,.8,.35,1)}
+  @keyframes pourin{0%{transform:translateY(-210px) scaleY(.4);opacity:0}45%{opacity:1}75%{transform:translateY(4px) scaleY(1.12)}100%{transform:translateY(0) scaleY(1);opacity:1}}
+  /* barre pièces + indice */
+  .subbar{display:flex;justify-content:center;align-items:center;gap:10px;padding:2px 12px 0}
+  .hintbtn{border:1px solid var(--line);background:linear-gradient(180deg,#243a6e,#182a52);color:var(--text);border-radius:12px;padding:8px 14px;font-size:14px;font-weight:800;cursor:pointer;display:flex;align-items:center;gap:6px}
+  .hintbtn:active{transform:scale(.96)}
+  .hleft{background:rgba(255,210,87,.15);border:1px solid rgba(255,210,87,.4);color:var(--gold);border-radius:9px;padding:1px 7px;font-size:12px;font-weight:800}
+  .dailycoins{font-size:34px;font-weight:800;color:var(--gold);margin:4px 0 8px}
+  .streakrow{background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:12px;padding:9px 12px;margin:0 0 16px;font-weight:800;font-size:15px}
   .tube.shake{animation:shake .3s}
   @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}50%{transform:translateX(5px)}75%{transform:translateX(-3px)}}
   .adbar{height:52px;min-height:52px;display:flex;align-items:center;justify-content:center;border-top:1px solid var(--line);background:rgba(6,10,24,.7);color:var(--muted);font-size:12px;letter-spacing:.3px;gap:8px}
@@ -110,6 +120,11 @@
 
   <div class="stage"><div class="tubes" id="tubes"></div></div>
 
+  <div class="subbar">
+    <span class="chip"><span class="k">🪙</span><span id="coins">0</span></span>
+    <button class="hintbtn" id="hintBtn">💡 Indice <span class="hleft" id="hintLeft">×3</span></button>
+  </div>
+
   <div class="foothint" id="hint">Touche un tube pour commencer.</div>
 
   <!-- Emplacement bannière (AdMob/AdSense à brancher) -->
@@ -151,6 +166,7 @@
         <div class="st"><span class="n">1</span><div>Touche un <b>tube plein</b> : il se soulève (sélectionné).</div></div>
         <div class="st"><span class="n">2</span><div>Touche un tube en <b>vert</b> pour <b>verser</b> la couleur du dessus. On ne verse que sur la <b>même couleur</b> (ou un tube vide).</div></div>
         <div class="st"><span class="n">3</span><div>Objectif : <b>4 couleurs identiques</b> dans chaque tube. Tout trié = niveau gagné ✓</div></div>
+        <div class="st"><span class="n">💡</span><div>Coincé ? Le bouton <b>Indice</b> montre le prochain coup (3 gratuits/jour, puis 25 🪙). Gagne des <b>pièces</b> à chaque niveau fini !</div></div>
       </div>
       <button class="btn" id="helpClose">J'ai compris, je joue ▶</button>
     </div>
@@ -185,6 +201,18 @@
     </div>
   </div>
 
+  <!-- DAILY reward -->
+  <div class="ov" id="dailyOv">
+    <div class="sheet">
+      <div class="big">🎁</div>
+      <h2>Cadeau du jour</h2>
+      <p id="dailySub">Reviens chaque jour pour faire grimper ta série.</p>
+      <div class="dailycoins" id="dailyCoins">+15 🪙</div>
+      <div class="streakrow" id="dailyStreak">🔥 Série : 1 jour</div>
+      <button class="btn" id="dailyClaim">Récupérer ✨</button>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 
 <script>
@@ -210,6 +238,37 @@
   function saveWins(){localStorage.setItem('cf_wins',JSON.stringify(winCount));}
   function saveGame(){localStorage.setItem(KEY,JSON.stringify({level:st.level}));}
   function savedLevel(){var g=load(KEY,null);return g&&g.level?g.level:1;}
+
+  /* ---- pièces + indices quotidiens + cadeau du jour ---- */
+  var HINT_FREE=3, HINT_COST=25;
+  var coins=load('cf_coins',0);
+  var hintMv=null, hintTimer=null;
+  function setCoins(n){ coins=Math.max(0,n); localStorage.setItem('cf_coins',JSON.stringify(coins)); var e=$('coins'); if(e) e.textContent=coins; }
+  function todayStr(d){ d=d||new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
+  var hd=load('cf_hintday',null);
+  if(!hd || hd.d!==todayStr()) hd={d:todayStr(),used:0};
+  function saveHd(){ localStorage.setItem('cf_hintday',JSON.stringify(hd)); }
+  function hintsFree(){ if(hd.d!==todayStr()){ hd={d:todayStr(),used:0}; saveHd(); } return Math.max(0,HINT_FREE-hd.used); }
+  function updateHintBtn(){ var f=hintsFree(), e=$('hintLeft'); if(e) e.textContent = f>0 ? '×'+f : HINT_COST+' 🪙'; }
+  function checkDaily(){
+    var d=load('cf_daily',null), t=todayStr();
+    if(d && d.last===t) return;
+    var y=new Date(); y.setDate(y.getDate()-1);
+    var streak=(d && d.last===todayStr(y)) ? (d.streak||0)+1 : 1;
+    var gain=15+Math.min(streak-1,6)*5;   // 15 → 45 🪙 max (série de 7+)
+    $('dailyCoins').textContent='+'+gain+' 🪙';
+    $('dailyStreak').textContent='🔥 Série : '+streak+' jour'+(streak>1?'s':'')+(streak>1?' consécutifs':'');
+    $('dailySub').textContent = streak>1
+      ? 'Tu reviens chaque jour — la série grimpe, le bonus aussi !'
+      : 'Reviens demain pour faire grimper ta série et gagner plus de pièces.';
+    $('dailyClaim').onclick=function(){
+      setCoins(coins+gain);
+      localStorage.setItem('cf_daily',JSON.stringify({last:t,streak:streak}));
+      $('dailyOv').classList.remove('show');
+      toast('+'+gain+' 🪙 ajoutées ✨');
+    };
+    $('dailyOv').classList.add('show');
+  }
 
   /* ---- audio (Web Audio, aucun fichier) ---- */
   var actx=null;
@@ -258,6 +317,97 @@
     return run.count>0 && space>0 && (to.length===0 || to[to.length-1]===run.color);
   }
 
+  /* ---- mini-solveur pour l'indice (DFS borné en temps, ~180ms max) ---- */
+  function legalMovesArr(ts){
+    var res=[];
+    for(var i=0;i<ts.length;i++){
+      var from=ts[i]; if(!from.length) continue;
+      var run=topRun(from);
+      var mono=(run.count===from.length);          // tube d'une seule couleur
+      if(mono && from.length===H) continue;        // tube terminé : on n'y touche pas
+      for(var j=0;j<ts.length;j++){
+        if(i===j) continue;
+        var to=ts[j], space=H-to.length;
+        if(space<=0) continue;
+        if(to.length && to[to.length-1]!==run.color) continue;
+        if(!to.length && mono) continue;           // monochrome → vide : coup inutile
+        res.push({from:i,to:j,color:run.color,count:Math.min(run.count,space),same:to.length>0});
+      }
+    }
+    return res;
+  }
+  function applyMoveArr(ts,mv){
+    var nt=ts.map(function(t){return t.slice();});
+    for(var m=0;m<mv.count;m++) nt[mv.to].push(nt[mv.from].pop());
+    return nt;
+  }
+  function moveScore(ts,mv){
+    var s=0; if(mv.same) s+=2;
+    var to=ts[mv.to];
+    if(to.length+mv.count===H){                    // ce coup complète un tube ?
+      var ok=true; for(var i=0;i<to.length;i++) if(to[i]!==mv.color){ok=false;break;}
+      if(ok) s+=5;
+    }
+    return s;
+  }
+  function stateKey(ts){ var a=ts.map(function(t){return t.join(',');}); a.sort(); return a.join('|'); }
+  function heur(ts){                             // nb de blocs de couleur à casser (0 = résolu)
+    var h=0;
+    for(var i=0;i<ts.length;i++){
+      var t=ts[i]; if(!t.length) continue;
+      var blocks=1; for(var k=1;k<t.length;k++) if(t[k]!==t[k-1]) blocks++;
+      h+=(blocks-1)*2;
+      if(!(t.length===H && blocks===1)) h+=1;    // tube pas encore terminé
+    }
+    return h;
+  }
+  function solveNext(tubes){                     // best-first (f = g + 3h), cap 180ms — validé <30ms niveau 30
+    var t0=Date.now(), LIMIT=180;
+    if(isSolved(tubes)) return null;
+    var open=[{ts:tubes,g:0,h:heur(tubes),first:null}];
+    var seen={}; seen[stateKey(tubes)]=1;
+    var expanded=0;
+    while(open.length){
+      if(expanded%64===0 && Date.now()-t0>LIMIT) return null;
+      var bi=0,bf=open[0].g+3*open[0].h;
+      for(var i=1;i<open.length;i++){ var f=open[i].g+3*open[i].h; if(f<bf){bf=f;bi=i;} }
+      var cur=open.splice(bi,1)[0]; expanded++;
+      var ms=legalMovesArr(cur.ts);
+      for(var m=0;m<ms.length;m++){
+        var nt=applyMoveArr(cur.ts,ms[m]);
+        var k=stateKey(nt); if(seen[k]) continue; seen[k]=1;
+        var node={ts:nt,g:cur.g+1,h:heur(nt),first:cur.first||ms[m]};
+        if(isSolved(nt)) return node.first;
+        open.push(node);
+      }
+      if(open.length>20000) return null;         // garde-fou mémoire
+    }
+    return null;
+  }
+  function fallbackMove(ts){                       // heuristique gloutonne si le solveur cale
+    var ms=legalMovesArr(ts);
+    if(!ms.length) return null;
+    ms.sort(function(a,b){ return moveScore(ts,b)-moveScore(ts,a); });
+    return ms[0];
+  }
+  function showHint(){
+    if(busy || !st || isSolved(st.tubes)) return;
+    if(document.querySelector('.ov.show')) return;
+    var mv=solveNext(st.tubes) || fallbackMove(st.tubes);
+    if(!mv){ toast('Aucun coup possible — ajoute un tube ➕ ou recommence ⟳'); return; }
+    var free=hintsFree();
+    if(free<=0){
+      if(coins>=HINT_COST){ setCoins(coins-HINT_COST); toast('−'+HINT_COST+' 🪙 pour un indice 💡'); }
+      else { toast('Plus d\'indices gratuits aujourd\'hui.<br>Il te faut '+HINT_COST+' 🪙 — finis des niveaux pour en gagner !'); return; }
+    } else { hd.used++; saveHd(); }
+    updateHintBtn();
+    st.hintUsed=1;
+    sel=-1; hintMv={from:mv.from,to:mv.to};
+    render(); sPick();
+    clearTimeout(hintTimer);
+    hintTimer=setTimeout(function(){ hintMv=null; render(); },4000);
+  }
+
   /* ---- render ---- */
   function render(){
     var wrap=$('tubes'); wrap.innerHTML='';
@@ -266,6 +416,7 @@
       if(idx===sel) el.className+=' sel';
       else if(sel>=0 && canPour(sel,idx)) el.className+=' valid';
       if(tubeDone(tube)) el.className+=' win';
+      if(hintMv && sel<0){ if(idx===hintMv.from) el.className+=' hintsrc'; else if(idx===hintMv.to) el.className+=' hintdst'; }
       for(var i=0;i<tube.length;i++){
         var s=document.createElement('div'); s.className='seg';
         s.style.background=COLORS[tube[i]];
@@ -296,6 +447,7 @@
     for(var i=tube.length-2;i>=0 && tube[i]===c;i--) n++; return {color:c,count:n}; }
   function onTube(idx){
     if(busy) return; ac();
+    if(hintMv){ hintMv=null; clearTimeout(hintTimer); }
     if(sel===-1){
       if(st.tubes[idx].length){ sel=idx; sPick(); render(); }
       else { toast('Ce tube est vide 🙂'); }
@@ -310,19 +462,27 @@
       for(var m=0;m<move;m++) to.push(from.pop());
       st.moves++; var srcIdx=sel; sel=-1; busy=true;
       render(); sPour();
-      // animate poured segments
+      // animate poured segments (le liquide "monte" dans le tube destination)
       var toEl=$('tubes').children[idx];
       var segs=toEl.querySelectorAll('.seg');
       for(var k=segs.length-move;k<segs.length;k++) if(segs[k]) segs[k].classList.add('pourin');
-      // source lift then drop
-      var srcEl=$('tubes').children[srcIdx]; if(srcEl){ srcEl.style.transform='translateY(-18px)'; }
+      // source : inclinaison vers la destination (verse réellement de son côté)
+      var srcEl=$('tubes').children[srcIdx];
+      if(srcEl && toEl){
+        var sr=srcEl.getBoundingClientRect(), tr=toEl.getBoundingClientRect();
+        var dx=(tr.left+tr.width/2)-(sr.left+sr.width/2);
+        var dir=dx>=0?1:-1;
+        var shift=Math.max(-46,Math.min(46,dx*0.22));
+        srcEl.classList.add('pouring');
+        srcEl.style.transform='translate('+shift+'px,-30px) rotate('+(dir*24)+'deg)';
+      }
       if(!tutDone){ tutDone=1; localStorage.setItem('cf_tut','1'); toast('Parfait ! 🎉 Range 4 couleurs identiques par tube.'); }
       setTimeout(function(){
-        if(srcEl) srcEl.style.transform='';
+        if(srcEl){ srcEl.style.transform=''; srcEl.classList.remove('pouring'); }
         busy=false; saveGame();
         if(tubeDone(st.tubes[idx])) sTubeDone();
         if(isSolved(st.tubes)) win();
-      }, 340);
+      }, 400);
     } else {
       // invalid: shake target, switch selection if it has content
       var tEl=$('tubes').children[idx];
@@ -341,7 +501,7 @@
   });
   $('restart').addEventListener('click',function(){
     if(!confirm('Recommencer ce niveau ?'))return;
-    st=genLevel(st.level); history=[]; sel=-1; render();
+    st=genLevel(st.level); history=[]; sel=-1; hintMv=null; clearTimeout(hintTimer); render();
   });
   /* ➕ ajouter un tube vide (1 par niveau) via pub récompensée — offert aux Pro */
   $('addtube').addEventListener('click',function(){
@@ -364,8 +524,10 @@
   function win(){
     winCount++; saveWins(); sWin();
     var stars = st.moves<=optimalGuess()?3:(st.moves<=optimalGuess()*1.7?2:1);
+    var gain = 10 + (st.hintUsed?0:5);            // +10 🪙, +5 bonus sans indice
+    setCoins(coins+gain);
     $('winStars').textContent = '★ '.repeat(stars).trim()+' '+'☆ '.repeat(3-stars).trim();
-    $('winSub').textContent = 'Résolu en '+st.moves+' coups. '+(stars===3?'Parfait ✨':'Continue, tu chauffes !');
+    $('winSub').innerHTML = 'Résolu en '+st.moves+' coups · <b style="color:var(--gold)">+'+gain+' 🪙</b>'+(st.hintUsed?'':' (sans indice ✨)')+'<br>'+(stars===3?'Parfait ✨':'Continue, tu chauffes !');
     setTimeout(function(){ $('winOv').classList.add('show'); }, 420);
   }
   function optimalGuess(){ return levelConfig(st.level).colors*2+2; }
@@ -373,7 +535,7 @@
     $('winOv').classList.remove('show');
     if(winCount % AD_EVERY === 0){ showInterstitial(nextLevel); } else { nextLevel(); }
   });
-  function nextLevel(){ st=genLevel(st.level+1); history=[]; sel=-1; saveGame(); render(); }
+  function nextLevel(){ st=genLevel(st.level+1); history=[]; sel=-1; hintMv=null; clearTimeout(hintTimer); saveGame(); render(); }
 
   /* ---- AdMob natif (repli house-ad sur le web / no-fill) ---- */
   var Cap=window.Capacitor;
@@ -483,6 +645,10 @@
   $('contBtn').addEventListener('click',function(){ ac(); st=genLevel(savedLevel()); history=[]; sel=-1; $('startOv').classList.remove('show'); render(); });
   st=genLevel(savedLevel()); render();
   $('startOv').classList.add('show');
+  // pièces + indice + cadeau du jour
+  setCoins(coins); updateHintBtn();
+  $('hintBtn').addEventListener('click',function(){ ac(); showHint(); });
+  checkDaily();
 
   // natif : réserver l'espace bannière + bouton retour Android
   if(isNative){
