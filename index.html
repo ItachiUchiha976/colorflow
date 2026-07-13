@@ -671,7 +671,9 @@
     var p=PROMOS[Math.floor(Math.random()*PROMOS.length)];
     $('promo').innerHTML='<div class="emo">'+p.emo+'</div><div><h3>'+p.h+'</h3><p>'+p.p+'</p>'+
       '<a class="plain" href="'+p.u+'" target="_blank" rel="noopener" style="font-size:13px">Découvrir →</a></div>';
-    var n=5; $('adCount').textContent=n; var b=$('adContinue'); b.disabled=true;
+    var b=$('adContinue');
+    b.innerHTML='Continuer dans <span id="adCount">5</span>…';
+    var n=5; $('adCount').textContent=n; b.disabled=true;
     b.firstChild.nodeValue = isReward ? 'Récompense dans ' : 'Continuer dans ';
     var skipEl=document.querySelector('#adOv .skip');
     if(skipEl) skipEl.textContent = isReward
